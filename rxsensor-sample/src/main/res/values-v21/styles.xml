@@ -15,7 +15,8 @@
   limitations under the License.
   -->
 <resources>
-    <style name="AppTheme" parent="android:Theme.Material.Light.DarkActionBar">
+
+    <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
         <item name="android:colorPrimary">#3F51B5</item>
         <item name="android:colorPrimaryDark">#303F9F</item>
         <item name="android:colorAccent">#FF9100</item>

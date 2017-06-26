@@ -29,11 +29,16 @@ import android.os.Looper;
 import android.support.annotation.CheckResult;
 import android.support.annotation.NonNull;
 
-import rx.Observable;
-import rx.Observable.OnSubscribe;
-import rx.Subscriber;
-import rx.functions.Action0;
-import rx.subscriptions.Subscriptions;
+import io.reactivex.BackpressureStrategy;
+import io.reactivex.Flowable;
+import io.reactivex.FlowableEmitter;
+import io.reactivex.FlowableOnSubscribe;
+import io.reactivex.Observable;
+import io.reactivex.ObservableEmitter;
+import io.reactivex.ObservableOnSubscribe;
+import io.reactivex.disposables.Disposables;
+import io.reactivex.functions.Action;
+
 
 /**
  * A lightweight wrapper around {@link SensorManager} which allows for continuous observations of
@@ -56,8 +61,8 @@ public final class RxSensorManager {
      * @see SensorManager#registerListener(SensorEventListener, Sensor, int)
      */
     @CheckResult
-    public Observable<SensorEvent> observeSensor(final int sensorType,
-                                                 final int samplingPeriodUs) {
+    public Flowable<SensorEvent> observeSensor(final int sensorType,
+                                               final int samplingPeriodUs) {
         return observeSensor(sensorType, samplingPeriodUs, 0);
     }
 
@@ -68,17 +73,20 @@ public final class RxSensorManager {
      * @see SensorManager#registerListener(SensorEventListener, Sensor, int, int)
      */
     @CheckResult
-    public Observable<SensorEvent> observeSensor(final int sensorType,
-                                                 final int samplingPeriodUs,
-                                                 final int maxReportLatencyUs) {
-        OnSubscribe<SensorEvent> subscribe = new OnSubscribe<SensorEvent>() {
+    public Flowable<SensorEvent> observeSensor(final int sensorType,
+                                               final int samplingPeriodUs,
+                                               final int maxReportLatencyUs) {
+
+
+        final FlowableOnSubscribe<SensorEvent> subscribe = new FlowableOnSubscribe<SensorEvent>() {
+
             @TargetApi(VERSION_CODES.KITKAT)
             @Override
-            public void call(final Subscriber<? super SensorEvent> subscriber) {
+            public void subscribe(final FlowableEmitter<SensorEvent> emitter) throws Exception {
                 // Determine Sensor to use
                 final Sensor sensor = mSensorManager.getDefaultSensor(sensorType);
                 if (sensor == null) {
-                    subscriber.onError(new SensorException());
+                    emitter.onError(new SensorException());
                     return;
                 }
 
@@ -86,11 +94,12 @@ public final class RxSensorManager {
                 final SensorEventListener listener = new SensorEventListener() {
                     @Override
                     public void onSensorChanged(SensorEvent event) {
-                        subscriber.onNext(event);
+                        emitter.onNext(event);
                     }
 
                     @Override
-                    public void onAccuracyChanged(Sensor sensor, int accuracy) { }
+                    public void onAccuracyChanged(Sensor sensor, int accuracy) {
+                    }
                 };
 
                 // Attempt to register listener to SensorManager
@@ -103,21 +112,21 @@ public final class RxSensorManager {
                             mSensorListenerHandler);
                 }
                 if (!success) {
-                    subscriber.onError(new SensorException(sensor));
+                    emitter.onError(new SensorException(sensor));
                     return;
                 }
 
                 // Set action on un-subscribe
-                subscriber.add(Subscriptions.create(new Action0() {
+                emitter.setDisposable(Disposables.fromAction(new Action() {
                     @Override
-                    public void call() {
+                    public void run() {
                         mSensorManager.unregisterListener(listener, sensor);
                     }
                 }));
             }
+
         };
-        return Observable.create(subscribe)
-                .onBackpressureLatest();
+        return Flowable.create(subscribe, BackpressureStrategy.LATEST);
     }
 
     /**
@@ -129,13 +138,13 @@ public final class RxSensorManager {
     @CheckResult
     @TargetApi(VERSION_CODES.JELLY_BEAN_MR2)
     public Observable<TriggerEvent> observeTrigger(final int sensorType) {
-        OnSubscribe<TriggerEvent> subscribe = new OnSubscribe<TriggerEvent>() {
+        final ObservableOnSubscribe<TriggerEvent> subscribe = new ObservableOnSubscribe<TriggerEvent>() {
             @Override
-            public void call(final Subscriber<? super TriggerEvent> subscriber) {
+            public void subscribe(final ObservableEmitter<TriggerEvent> emitter) throws Exception {
                 // Determine Sensor to use
                 final Sensor sensor = mSensorManager.getDefaultSensor(sensorType);
                 if (sensor == null) {
-                    subscriber.onError(new SensorException());
+                    emitter.onError(new SensorException());
                     return;
                 }
 
@@ -144,26 +153,28 @@ public final class RxSensorManager {
                 final TriggerEventListener listener = new TriggerEventListener() {
                     @Override
                     public void onTrigger(TriggerEvent event) {
-                        subscriber.onNext(event);
-                        subscriber.onCompleted();
+                        emitter.onNext(event);
+                        emitter.onComplete();
                     }
                 };
 
                 // Attempt to request a trigger sensor from SensorManager
                 boolean success = mSensorManager.requestTriggerSensor(listener, sensor);
                 if (!success) {
-                    subscriber.onError(new SensorException(sensor));
+                    emitter.onError(new SensorException(sensor));
                     return;
                 }
 
                 // Set action on un-subscribe
-                subscriber.add(Subscriptions.create(new Action0() {
+                emitter.setDisposable(Disposables.fromAction(new Action() {
                     @Override
-                    public void call() {
+                    public void run() throws Exception {
                         mSensorManager.cancelTriggerSensor(listener, sensor);
                     }
+
                 }));
             }
+
         };
         return Observable.create(subscribe);
     }

@@ -25,25 +25,27 @@ import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import com.jakewharton.rxbinding.widget.RxCompoundButton;
+import com.jakewharton.rxbinding2.widget.RxCompoundButton;
 import com.nvanbenschoten.rxsensor.RxSensorManager;
-import com.trello.rxlifecycle.components.RxActivity;
+import com.trello.rxlifecycle2.components.RxActivity;
 
-import butterknife.Bind;
+import butterknife.BindView;
 import butterknife.ButterKnife;
-import rx.Observable;
-import rx.functions.Action1;
-import rx.functions.Func1;
+import io.reactivex.Observable;
+import io.reactivex.ObservableSource;
+import io.reactivex.functions.Consumer;
+import io.reactivex.functions.Function;
+import io.reactivex.functions.Predicate;
+
 
 public class MainActivity extends RxActivity {
 
+    @BindView(R.id.sensor_switch) Switch mSensorSwitch;
+    @BindView(R.id.sensor_data_0) TextView mSensorData0;
+    @BindView(R.id.sensor_data_1) TextView mSensorData1;
+    @BindView(R.id.sensor_data_2) TextView mSensorData2;
+    @BindView(R.id.trigger_switch) Switch mTriggerSwitch;
     private RxSensorManager mRxSensorManager;
-
-    @Bind(R.id.sensor_switch) Switch mSensorSwitch;
-    @Bind(R.id.sensor_data_0) TextView mSensorData0;
-    @Bind(R.id.sensor_data_1) TextView mSensorData1;
-    @Bind(R.id.sensor_data_2) TextView mSensorData2;
-    @Bind(R.id.trigger_switch) Switch mTriggerSwitch;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -56,9 +58,9 @@ public class MainActivity extends RxActivity {
 
         // Set up Rx Chains
         RxCompoundButton.checkedChanges(mSensorSwitch)
-                .doOnNext(new Action1<Boolean>() {
+                .doOnNext(new Consumer<Boolean>() {
                     @Override
-                    public void call(Boolean checked) {
+                    public void accept(Boolean checked) throws Exception {
                         if (checked) {
                             showData();
                         } else {
@@ -66,63 +68,65 @@ public class MainActivity extends RxActivity {
                         }
                     }
                 })
-                .switchMap(new Func1<Boolean, Observable<? extends SensorEvent>>() {
+                .switchMap(new Function<Boolean, ObservableSource<? extends SensorEvent>>() {
                     @Override
-                    public Observable<? extends SensorEvent> call(Boolean checked) {
+                    public ObservableSource<? extends SensorEvent> apply(Boolean checked) throws Exception {
                         if (checked) {
                             return mRxSensorManager.observeSensor(Sensor.TYPE_ACCELEROMETER,
-                                    SensorManager.SENSOR_DELAY_NORMAL);
+                                    SensorManager.SENSOR_DELAY_NORMAL)
+                                    .toObservable();
                         } else {
                             return Observable.empty();
                         }
                     }
                 })
                 .compose(this.<SensorEvent>bindToLifecycle())
-                .subscribe(new Action1<SensorEvent>() {
+                .subscribe(new Consumer<SensorEvent>() {
                     @Override
-                    public void call(SensorEvent sensorEvent) {
+                    public void accept(SensorEvent sensorEvent) throws Exception {
                         mSensorData0.setText(Float.toString(sensorEvent.values[0]));
                         mSensorData1.setText(Float.toString(sensorEvent.values[1]));
                         mSensorData2.setText(Float.toString(sensorEvent.values[2]));
                     }
-                }, new Action1<Throwable>() {
+
+                }, new Consumer<Throwable>() {
                     @Override
-                    public void call(Throwable throwable) {
+                    public void accept(Throwable throwable) throws Exception {
                         Toast.makeText(MainActivity.this, "Error caught observing sensor: " +
                                 throwable.getMessage(), Toast.LENGTH_LONG).show();
                     }
                 });
 
         RxCompoundButton.checkedChanges(mTriggerSwitch)
-                .doOnNext(new Action1<Boolean>() {
+                .doOnNext(new Consumer<Boolean>() {
                     @Override
-                    public void call(Boolean checked) {
+                    public void accept(Boolean checked) throws Exception {
                         mTriggerSwitch.setEnabled(!checked);
                     }
                 })
-                .filter(new Func1<Boolean, Boolean>() {
+                .filter(new Predicate<Boolean>() {
                     @Override
-                    public Boolean call(Boolean checked) {
+                    public boolean test(Boolean checked) throws Exception {
                         return checked;
                     }
                 })
-                .switchMap(new Func1<Boolean, Observable<? extends TriggerEvent>>() {
+                .switchMap(new Function<Boolean, ObservableSource<? extends TriggerEvent>>() {
                     @Override
-                    public Observable<? extends TriggerEvent> call(Boolean aBoolean) {
+                    public ObservableSource<? extends TriggerEvent> apply(Boolean aBoolean) throws Exception {
                         return mRxSensorManager.observeTrigger(Sensor.TYPE_SIGNIFICANT_MOTION);
                     }
                 })
                 .compose(this.<TriggerEvent>bindToLifecycle())
-                .subscribe(new Action1<TriggerEvent>() {
+                .subscribe(new Consumer<TriggerEvent>() {
                     @Override
-                    public void call(TriggerEvent triggerEvent) {
+                    public void accept(TriggerEvent triggerEvent) throws Exception {
                         Toast.makeText(MainActivity.this, "Trigger event at: " +
                                 triggerEvent.timestamp, Toast.LENGTH_LONG).show();
                         mTriggerSwitch.setChecked(false);
                     }
-                }, new Action1<Throwable>() {
+                }, new Consumer<Throwable>() {
                     @Override
-                    public void call(Throwable throwable) {
+                    public void accept(Throwable throwable) throws Exception {
                         Toast.makeText(MainActivity.this, "Error caught observing trigger: " +
                                 throwable.getMessage(), Toast.LENGTH_LONG).show();
                     }
